@@ -70,3 +70,5 @@ app.get("/api/stamps", (req, res) => {
 app.listen(PORT, () => {
     console.log(`✅ Backend running at http://localhost:${PORT}`);
 });
+
+console.log("🚀 正しい server.ts が起動しました！");
