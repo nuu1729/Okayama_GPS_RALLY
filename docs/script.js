@@ -95,58 +95,6 @@ const translations = {
   }
 };
 
-// --- 拠点データ ---
-const locations = [
-  { 
-    name: {
-      ja: "西古松南部公園", 
-      en: "Nishikomatsu Nanbu Park",
-      ko: "니시코마츠 남부공원",
-      zh: "西古松南部公园"
-    }, 
-    address: "〒700-0973 岡山県岡山市北区下中野", 
-    lat: 34.6433, lng: 133.9053, radius: 100,
-    image: "images/location-0.jpg",
-    icon: "🌳"
-  },
-  { 
-    name: {
-      ja: "大元東公園", 
-      en: "Omoto East Park",
-      ko: "오모토 동쪽공원",
-      zh: "大元东公园"
-    }, 
-    address: "〒700-0927 岡山県岡山市北区西古松250", 
-    lat: 34.6427, lng: 133.9089, radius: 100,
-    image: "images/location-1.png",
-    icon: "🌸"
-  },
-  { 
-    name: {
-      ja: "岡山城", 
-      en: "Okayama Castle",
-      ko: "오카야마성",
-      zh: "冈山城"
-    }, 
-    address: "〒700-0823 岡山県岡山市北区丸の内2-3-1", 
-    lat: 34.6613, lng: 133.9356, radius: 200,
-    image: "images/location-2.jpg",
-    icon: "🏯"
-  },
-  { 
-    name: {
-      ja: "岡山後楽園", 
-      en: "Okayama Korakuen",
-      ko: "오카야마 고라쿠엔",
-      zh: "冈山后乐园"
-    }, 
-    address: "〒703-8257 岡山県岡山市北区後楽園1-5", 
-    lat: 34.6640, lng: 133.9346, radius: 200,
-    image: "images/location-3.jpg",
-    icon: "🌺"
-  }
-];
-
 // グローバル変数
 let visitedLocations = new Set();
 let currentPosition = null;
@@ -836,3 +784,43 @@ window.addEventListener('beforeunload', () => {
     navigator.geolocation.clearWatch(watchId); 
   }
 });
+
+// ===== サンプル：バックエンドAPI呼び出し =====
+//async function fetchHello() {
+//  try {
+//    const response = await fetch("http://localhost:3000/api/hello");
+//    const data = await response.json();
+//    console.log("バックエンドからの応答:", data);
+
+    // ページに表示してみる
+//    const apiMessageDiv = document.createElement("div");
+//    apiMessageDiv.textContent = "バックエンド応答: " + data.message;
+//    document.body.appendChild(apiMessageDiv);
+//
+//  } catch (error) {
+//    console.error("API呼び出し失敗:", error);
+//  }
+//}
+
+// ページ読み込み時に呼び出す
+//window.addEventListener("load", fetchHello);
+
+//　グローバル変数として定義
+let locations = [];
+
+// ===== サンプル：スタンプデータをバックエンドから取得 =====
+async function fetchStamps() {
+  try {
+    const res = await fetch("http://localhost:3000/api/stamps");
+    const stamps = await res.json();
+    console.log("スタンプデータを取得:", stamps);
+
+    // ここで stamps を使ってUIに反映させる処理に渡す
+    initStampRally(stamps);
+  } catch (err) {
+    console.error("スタンプデータの取得に失敗しました:", err);
+  }
+}
+
+// ページ読み込み時に実行
+window.addEventListener("DOMContentLoaded", fetchStamps);
