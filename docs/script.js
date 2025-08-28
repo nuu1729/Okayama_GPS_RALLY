@@ -1,4 +1,4 @@
-// script.js - ポケモン図鑑風コレクション対応版（地図機能修正版）
+// script.js - バックエンドからスタンプデータを取得する版
 
 // ===== Service Worker registration =====
 if ("serviceWorker" in navigator) {
@@ -44,7 +44,7 @@ const translations = {
     allComplete: "🎊 Congrats! You got all the stamps!",
     distance: "Distance: {distance}",
     permissionDenied: "Location is off. Please turn it on in settings.",
-    positionUnavailable: "Can’t find your location",
+    positionUnavailable: "Can't find your location",
     timeout: "Location check took too long",
     generalError: "Something went wrong with location",
     tabRally: "🎯 Rally",
@@ -72,7 +72,7 @@ const translations = {
     tabCollection: "📚 모음집",
     notAcquired: "아직 안 모았어요"
   },
-    zh: {
+  zh: {
     appTitle: "🏯 冈山GPS集章活动",
     stampLabel: "我的印章",
     calculating: "正在计算距离…",
@@ -101,11 +101,118 @@ let currentPosition = null;
 let watchId = null;
 let currentLanguage = 'ja';
 let currentTab = 'rally';
+let locations = []; // バックエンドから取得するデータを格納
 
 // 地図関連の変数
 let map = null;
 let markers = [];
 let userMarker = null;
+
+// ===== バックエンドからスタンプデータを取得 =====
+async function fetchStamps() {
+  try {
+    const res = await fetch("http://localhost:3000/api/stamps");
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    const stamps = await res.json();
+    console.log("スタンプデータを取得:", stamps);
+
+    // バックエンドから取得したデータをlocationsに設定
+    locations = stamps;
+    
+    // データ取得後にアプリを初期化
+    initStampRally();
+  } catch (err) {
+    console.error("スタンプデータの取得に失敗しました:", err);
+    
+    // フォールバック: バックエンドが利用できない場合のデフォルトデータ
+    locations = [
+      { 
+        id: 0,
+        name: {
+          ja: "西古松南部公園", 
+          en: "Nishikomatsu Nanbu Park",
+          ko: "니시코마츠 남부공원",
+          zh: "西古松南部公园"
+        },
+        address: "〒700-0973 岡山県岡山市北区下中野",
+        lat: 34.6433, lng: 133.9053, radius: 100,
+        image: "images/location-0.jpg",
+        icon: "🌳"
+      },
+      { 
+        id: 1,
+        name: {
+          ja: "大元東公園", 
+          en: "Omoto East Park",
+          ko: "오모토 동쪽공원",
+          zh: "大元东公园"
+        },
+        address: "〒700-0927 岡山県岡山市北区西古松250",
+        lat: 34.6427, lng: 133.9089, radius: 100,
+        image: "images/location-1.png",
+        icon: "🌸"
+      },
+      { 
+        id: 2,
+        name: {
+          ja: "岡山城", 
+          en: "Okayama Castle",
+          ko: "오카야마성",
+          zh: "冈山城"
+        },
+        address: "〒700-0823 岡山県岡山市北区丸の内2-3-1",
+        lat: 34.6613, lng: 133.9356, radius: 200,
+        image: "images/location-2.jpg",
+        icon: "🏯"
+      },
+      { 
+        id: 3,
+        name: {
+          ja: "岡山後楽園", 
+          en: "Okayama Korakuen",
+          ko: "오카야마 고라쿠엔",
+          zh: "冈山后乐园"
+        },
+        address: "〒703-8257 岡山県岡山市北区後楽園1-5",
+        lat: 34.6640, lng: 133.9346, radius: 200,
+        image: "images/location-3.jpg",
+        icon: "🌺"
+      }
+    ];
+    
+    console.log("フォールバックデータを使用します");
+    initStampRally();
+  }
+}
+
+// スタンプラリーの初期化（データ取得後に実行）
+function initStampRally() {
+  console.log('スタンプラリー初期化開始 - locations数:', locations.length);
+  
+  // 総スタンプ数を更新
+  const totalStampsElement = document.getElementById('totalStamps');
+  if (totalStampsElement) {
+    totalStampsElement.textContent = locations.length;
+  }
+  
+  // 地図を初期化（少し遅延させる）
+  setTimeout(() => {
+    initMap();
+  }, 100);
+  
+  // HTMLの更新（動的にlocation cardsを生成）
+  updateLocationCards();
+  
+  // その他の初期化処理
+  loadSavedData();
+  updateDisplay();
+  updateLanguage();
+  generateCollectionGrid();
+  
+  console.log('スタンプラリー初期化完了');
+}
 
 // 地図初期化関数
 function initMap() {
@@ -126,45 +233,62 @@ function initMap() {
     }).addTo(map);
 
     // 各ロケーションにピンを立てる
+    markers = []; // 既存のマーカーをクリア
     locations.forEach((loc, i) => {
       const marker = L.marker([loc.lat, loc.lng]).addTo(map)
         .bindPopup(`<b>${loc.name.ja}</b><br>${loc.address}`);
       markers.push(marker);
     });
 
-    console.log('地図が正常に初期化されました');
+    console.log('地図が正常に初期化されました - マーカー数:', markers.length);
   } catch (error) {
     console.error('地図初期化エラー:', error);
   }
 }
 
+// location cardsを動的に生成する関数
+function updateLocationCards() {
+  const mainContent = document.querySelector('.main-content');
+  if (!mainContent) return;
+
+  // 既存のlocation cardsをクリア
+  mainContent.innerHTML = '';
+
+  // 各locationに対してcardを生成
+  locations.forEach((loc, index) => {
+    const article = document.createElement('article');
+    article.className = 'location-card';
+    article.id = `location-${index}`;
+    article.setAttribute('aria-labelledby', `locname-${index}`);
+    
+    article.innerHTML = `
+      <div class="location-header">
+        <span class="stamp-icon" aria-hidden="true">${loc.icon}</span>
+        <div class="location-info">
+          <div id="locname-${index}" class="location-name">${loc.name.ja}</div>
+          <div class="location-address">${loc.address}</div>
+        </div>
+      </div>
+      <div id="distance-${index}" class="distance-info">距離を計算中...</div>
+      <button class="check-button" id="checkBtn-${index}" onclick="checkLocation(${index})">スタンプを獲得する</button>
+    `;
+    
+    mainContent.appendChild(article);
+  });
+}
+
 // DOMContentLoaded イベントリスナー
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM読み込み完了');
-  initApp();
-});
-
-// ===== App init =====
-function initApp() {
-  console.log('アプリ初期化開始');
-  loadSavedData();
+  // バックエンドからデータを取得してからアプリを初期化
+  fetchStamps();
+  
+  // BGMとUI関連の初期化は先に行う
   tryAutoPlayBGM();
-  startLocationTracking();
-  updateDisplay();
-  updateLanguage();
   bindUI();
-  generateCollectionGrid();
-  
-  const total = document.getElementById('totalStamps');
-  if (total) total.textContent = locations.length;
-
-  // 地図を初期化（少し遅延させる）
-  setTimeout(() => {
-    initMap();
-  }, 100);
-  
-  console.log('アプリ初期化完了');
-}
+  startLocationTracking();
+  updateLanguage();
+});
 
 function bindUI() {
   const playBtn = document.getElementById('playBGM'); 
@@ -178,6 +302,7 @@ function bindUI() {
     const bgm = document.getElementById('bgm'); 
     if (bgm) { bgm.pause(); bgm.currentTime = 0; }
   });
+  
   // ダークモード切替（セレクト形式）
   const themeSelect = document.getElementById('themeBtn');
   if (themeSelect) {
@@ -299,11 +424,6 @@ function changeLanguage() {
 }
 
 function updateLanguage() { 
-  const elements = document.querySelectorAll('[data-' + currentLanguage + ']'); 
-  elements.forEach(el => { 
-    const v = el.getAttribute('data-' + currentLanguage); 
-    if (v != null) el.textContent = v; 
-  }); 
   updateDistances(); 
   
   const appTitle = document.getElementById('appTitle'); 
@@ -321,6 +441,14 @@ function updateLanguage() {
   
   const tabCollection = document.getElementById('tab-collection');
   if (tabCollection) tabCollection.textContent = translations[currentLanguage].tabCollection;
+
+  // location cardsの名前を更新
+  locations.forEach((loc, i) => {
+    const nameElement = document.getElementById(`locname-${i}`);
+    if (nameElement) {
+      nameElement.textContent = loc.name[currentLanguage] || loc.name.ja;
+    }
+  });
 }
 
 function getText(key, params = {}) { 
@@ -417,7 +545,7 @@ function formatDistance(distance) {
 }
 
 function updateDistances() { 
-  if (!currentPosition) return; 
+  if (!currentPosition || locations.length === 0) return; 
   
   locations.forEach((loc, i) => { 
     const dist = calculateDistance(
@@ -628,6 +756,8 @@ function createVictoryBeep() {
 
 // ===== Display and persistence =====
 function updateDisplay() { 
+  if (locations.length === 0) return;
+  
   const progress = (visitedLocations.size / locations.length) * 100; 
   
   const stampCount = document.getElementById('stampCount'); 
@@ -784,43 +914,3 @@ window.addEventListener('beforeunload', () => {
     navigator.geolocation.clearWatch(watchId); 
   }
 });
-
-// ===== サンプル：バックエンドAPI呼び出し =====
-//async function fetchHello() {
-//  try {
-//    const response = await fetch("http://localhost:3000/api/hello");
-//    const data = await response.json();
-//    console.log("バックエンドからの応答:", data);
-
-    // ページに表示してみる
-//    const apiMessageDiv = document.createElement("div");
-//    apiMessageDiv.textContent = "バックエンド応答: " + data.message;
-//    document.body.appendChild(apiMessageDiv);
-//
-//  } catch (error) {
-//    console.error("API呼び出し失敗:", error);
-//  }
-//}
-
-// ページ読み込み時に呼び出す
-//window.addEventListener("load", fetchHello);
-
-//　グローバル変数として定義
-let locations = [];
-
-// ===== サンプル：スタンプデータをバックエンドから取得 =====
-async function fetchStamps() {
-  try {
-    const res = await fetch("http://localhost:3000/api/stamps");
-    const stamps = await res.json();
-    console.log("スタンプデータを取得:", stamps);
-
-    // ここで stamps を使ってUIに反映させる処理に渡す
-    initStampRally(stamps);
-  } catch (err) {
-    console.error("スタンプデータの取得に失敗しました:", err);
-  }
-}
-
-// ページ読み込み時に実行
-window.addEventListener("DOMContentLoaded", fetchStamps);
