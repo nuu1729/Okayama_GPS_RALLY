@@ -163,7 +163,7 @@ async function fetchStamps() {
           zh: "冈山城"
         },
         address: "〒700-0823 岡山県岡山市北区丸の内2-3-1",
-        lat: 34.6613, lng: 133.9356, radius: 200,
+        lat: 34.6647, lng: 133.9357, radius: 200,
         image: "images/location-2.jpg",
         icon: "🏯"
       },
