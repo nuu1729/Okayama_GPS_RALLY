@@ -103,7 +103,7 @@
 ![代替テキスト](./docs/images/獲得後.png)
 
 #### 多言語・ダークモード
-![多言語・ダークモードのデモ](docs/lang&theme_change.gif)
+<img src="docs/lang&theme_change.gif" width="600" alt="多言語・ダークモードのデモ" />
 
 ### 2.3 動作デモ動画（スマホでのテスト画面）
 ```
