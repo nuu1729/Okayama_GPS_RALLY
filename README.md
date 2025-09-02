@@ -71,9 +71,8 @@
 ![代替テキスト](./docs/images/獲得後.png)
 
 #### 多言語・ダークモード
-<video controls width="100%">
-  <source src="https://github.com/nuu1729/Okayama_GPS_RALLY/blob/main/docs/lang%26theme_change.mp4" type="video/mp4">
-  お使いのブラウザは動画タグに対応していません。
+<video src="https://github.com/ユーザー名/リポジトリ名/raw/ブランチ名/動画ファイルのパス" controls>
+    <p>動画を再生するには、ブラウザを更新してください。</p>
 </video>
 
 ### 2.3 動作デモ動画（スマホでのテスト画面）
