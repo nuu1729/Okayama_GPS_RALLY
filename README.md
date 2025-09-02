@@ -103,8 +103,8 @@
 ![代替テキスト](./docs/images/獲得後.png)
 
 #### 多言語・ダークモード
-<video src="https://github.com/nuu1729/Okayama_GPS_RALLY/raw/main/docs/lang&theme_change.mp4" controls width="100%">
-    お使いのブラウザは動画タグに対応していません。
+<video src="https://www.google.com/search?q=https://github.com/nuu1729/Okayama_GPS_RALLY/raw/main/docs/lang%2526theme_change.mp4" controls width="100%">
+お使いのブラウザは動画タグに対応していません。
 </video>
 
 ### 2.3 動作デモ動画（スマホでのテスト画面）
