@@ -71,7 +71,7 @@
 ![代替テキスト](./docs/images/獲得後.png)
 
 #### 多言語・ダークモード
-<video src="https://github.com/ユーザー名/リポジトリ名/raw/ブランチ名/動画ファイルのパス" controls>
+<video src="docs/lang&theme_change.mp4" controls>
     <p>動画を再生するには、ブラウザを更新してください。</p>
 </video>
 
