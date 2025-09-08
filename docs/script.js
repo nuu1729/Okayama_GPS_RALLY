@@ -154,7 +154,8 @@ async function fetchStamps() {
         image: "images/location-1.png",
         icon: "🌸"
       },
-      { 
+/*
+      {   
         id: 2,
         name: {
           ja: "岡山城", 
@@ -181,6 +182,7 @@ async function fetchStamps() {
         icon: "🌺"
       }
     ];
+*/
     
     console.log("フォールバックデータを使用します");
     initStampRally();
