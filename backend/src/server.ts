@@ -1,40 +1,69 @@
-// src/server.ts
+// backend/src/server.ts
 import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import database from './database';
 
 const app = express();
-app.use(cors());
-app.use(express.json()); // JSON parsing middleware
-const PORT = 3000;
 
-// データベースのインポート（requireを使用）
-const database = require('./database');
+// CORS設定（より具体的に）
+app.use(cors({
+  origin: ['http://localhost:3001', 'http://localhost:8080', 'http://127.0.0.1:5500'],
+  credentials: true
+}));
+
+app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
 // JSONファイルからスタンプデータを読み込む
 const stampsPath = path.join(__dirname, "../data/stamps.json");
 let stamps: any[] = [];
 
 try {
-  stamps = JSON.parse(fs.readFileSync(stampsPath, "utf-8"));
+  if (fs.existsSync(stampsPath)) {
+    stamps = JSON.parse(fs.readFileSync(stampsPath, "utf-8"));
+    console.log(`✅ Loaded ${stamps.length} stamps from JSON file`);
+  } else {
+    console.warn("⚠️ Stamps JSON file not found, using empty array");
+    stamps = [];
+  }
 } catch (error) {
-  console.error("スタンプデータの読み込みに失敗:", error);
-  stamps = []; // フォールバック
+  console.error("❌ Error loading stamps data:", error);
+  stamps = [];
 }
 
-// APIエンドポイント
-app.get("/api/stamps", (req, res) => {
-    res.json(stamps);
+// ===== ヘルスチェックエンドポイント =====
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    stamps: stamps.length
+  });
 });
 
-// === ユーザー管理API ===
+// ===== スタンプデータAPI =====
+app.get("/api/stamps", (req, res) => {
+  res.json(stamps);
+});
+
+// ===== ユーザー管理API =====
 
 // ユーザー初期化
 app.post("/api/users/init", async (req, res) => {
   try {
     const { deviceInfo, language } = req.body;
-    const userId = await database.createUser(deviceInfo, language);
+    
+    if (!deviceInfo) {
+      return res.status(400).json({
+        success: false,
+        error: "Device info is required"
+      });
+    }
+
+    const userId = await database.createUser(deviceInfo, language || 'ja');
+    
+    console.log(`✅ New user created: ${userId.substring(0, 8)}...`);
     
     res.json({
       success: true,
@@ -42,10 +71,10 @@ app.post("/api/users/init", async (req, res) => {
       message: "User initialized successfully"
     });
   } catch (error: any) {
-    console.error('User init error:', error);
+    console.error('❌ User init error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || "Failed to create user"
     });
   }
 });
@@ -55,6 +84,13 @@ app.get("/api/users/:userId/data", async (req, res) => {
   try {
     const { userId } = req.params;
     
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID is required"
+      });
+    }
+
     // アクティビティ更新
     await database.updateUserActivity(userId);
     
@@ -74,10 +110,10 @@ app.get("/api/users/:userId/data", async (req, res) => {
       }
     });
   } catch (error: any) {
-    console.error('Get user data error:', error);
+    console.error('❌ Get user data error:', error);
     res.status(500).json({
       success: false, 
-      error: error.message
+      error: error.message || "Failed to get user data"
     });
   }
 });
@@ -88,9 +124,24 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
     const { userId, stampId } = req.params;
     const { location } = req.body;
     
+    if (!userId || !stampId) {
+      return res.status(400).json({
+        success: false,
+        error: "User ID and Stamp ID are required"
+      });
+    }
+
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error: "Valid location (lat, lng) is required"
+      });
+    }
+    
     const result = await database.collectStamp(userId, parseInt(stampId), location);
     
     if (result.alreadyCollected) {
+      console.log(`ℹ️ Stamp ${stampId} already collected by user ${userId.substring(0, 8)}...`);
       return res.json({
         success: false,
         message: "Stamp already collected",
@@ -98,16 +149,18 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
       });
     }
     
+    console.log(`✅ Stamp ${stampId} collected by user ${userId.substring(0, 8)}...`);
+    
     res.json({
       success: true,
       recordId: result.id,
       message: "Stamp collected successfully"
     });
   } catch (error: any) {
-    console.error('Collect stamp error:', error);
+    console.error('❌ Collect stamp error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || "Failed to collect stamp"
     });
   }
 });
@@ -121,22 +174,47 @@ app.get("/api/stats", async (req, res) => {
       data: stats
     });
   } catch (error: any) {
-    console.error('Get stats error:', error);
+    console.error('❌ Get stats error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message || "Failed to get stats"
     });
   }
 });
 
+// 404ハンドラー
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Endpoint not found"
+  });
+});
+
+// エラーハンドラー
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('❌ Server error:', err);
+  res.status(500).json({
+    success: false,
+    error: "Internal server error"
+  });
+});
+
 // サーバー起動
 app.listen(PORT, () => {
-    console.log(`✅ Backend running at http://localhost:${PORT}`);
+  console.log(`🚀 Backend server running at http://localhost:${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`🏯 Stamps API: http://localhost:${PORT}/api/stamps`);
 });
 
 // グレースフルシャットダウン
 process.on('SIGINT', () => {
-  console.log('Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...');
+  database.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Shutting down gracefully...');
   database.close();
   process.exit(0);
 });
