@@ -153,8 +153,8 @@ async function fetchStamps() {
         lat: 34.6427, lng: 133.9089, radius: 100,
         image: "images/location-1.png",
         icon: "🌸"
-      },
-/*
+      }
+/* 一時的に２か所にしています
       {   
         id: 2,
         name: {
@@ -181,8 +181,9 @@ async function fetchStamps() {
         image: "images/location-3.jpg",
         icon: "🌺"
       }
-    ];
 */
+    ];
+
     
     console.log("フォールバックデータを使用します");
     initStampRally();
