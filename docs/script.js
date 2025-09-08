@@ -1,4 +1,4 @@
-// script.js - バックエンドからスタンプデータを取得する版
+// script.js - バックエンドからスタンプデータを取得する版 + ユーザー同期機能
 
 // ===== Service Worker registration =====
 if ("serviceWorker" in navigator) {
@@ -108,6 +108,187 @@ let map = null;
 let markers = [];
 let userMarker = null;
 
+// ===== ユーザー同期機能追加 =====
+class UserSyncManager {
+  constructor() {
+    this.userId = null;
+    this.syncInterval = null;
+    this.API_BASE = 'http://localhost:3000/api';
+    this.isOnline = navigator.onLine;
+    this.pendingSync = false;
+  }
+
+  async initUser() {
+    try {
+      const savedUserId = localStorage.getItem('stampRallyUserId');
+      if (savedUserId) {
+        this.userId = savedUserId;
+        console.log('✅ Existing user loaded:', this.userId.substring(0, 8) + '...');
+        return await this.syncFromServer();
+      }
+
+      const deviceInfo = this.getDeviceInfo();
+      const language = currentLanguage || 'ja';
+      
+      const response = await fetch(`${this.API_BASE}/users/init`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceInfo, language })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        this.userId = result.userId;
+        localStorage.setItem('stampRallyUserId', this.userId);
+        console.log('✅ New user created:', this.userId.substring(0, 8) + '...');
+        this.showSyncStatus('success', '新しいユーザーを作成しました');
+        return true;
+      }
+    } catch (error) {
+      console.warn('❌ User init failed:', error);
+      this.showSyncStatus('error', 'オフラインモードで動作中');
+      return false;
+    }
+  }
+
+  getDeviceInfo() {
+    const ua = navigator.userAgent;
+    if (ua.includes('iPhone')) return 'iPhone Safari';
+    if (ua.includes('Android')) return 'Android Chrome';
+    if (ua.includes('Windows')) return 'Windows PC';
+    if (ua.includes('Mac')) return 'Mac PC';
+    return 'Unknown Device';
+  }
+
+  async syncFromServer() {
+    if (!this.userId || !this.isOnline) return false;
+    
+    try {
+      const response = await fetch(`${this.API_BASE}/users/${this.userId}/data`);
+      const result = await response.json();
+      
+      if (result.success) {
+        const serverData = result.data;
+        const localVisited = new Set(visitedLocations);
+        const serverVisited = new Set(serverData.visitedLocations);
+        
+        // サーバーにあってローカルにないデータを同期
+        let hasUpdates = false;
+        serverVisited.forEach(stampId => {
+          if (!localVisited.has(stampId)) {
+            visitedLocations.add(stampId);
+            hasUpdates = true;
+          }
+        });
+
+        if (hasUpdates) {
+          saveData();
+          updateDisplay();
+          if (currentTab === 'collection') {
+            updateCollectionDisplay();
+          }
+          this.showSyncStatus('success', `${hasUpdates ? '新しい' : ''}データを同期しました`);
+        }
+        
+        console.log('✅ Synced from server:', serverData.totalStamps, 'stamps');
+        return true;
+      }
+    } catch (error) {
+      console.warn('❌ Sync from server failed:', error);
+      this.showSyncStatus('error', '同期に失敗しました');
+      return false;
+    }
+  }
+
+  async recordStampToServer(stampId, location) {
+    if (!this.userId || !this.isOnline) {
+      this.pendingSync = true;
+      return false;
+    }
+    
+    try {
+      const response = await fetch(`${this.API_BASE}/users/${this.userId}/stamps/${stampId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ location })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        console.log('✅ Stamp recorded to server:', stampId);
+        this.showSyncStatus('success', 'スタンプをサーバーに保存しました');
+        return true;
+      } else {
+        console.log('ℹ️ Stamp already exists on server:', stampId);
+        return false;
+      }
+    } catch (error) {
+      console.warn('❌ Failed to record stamp to server:', error);
+      this.pendingSync = true;
+      this.showSyncStatus('error', 'スタンプ保存に失敗（後で再試行）');
+      return false;
+    }
+  }
+
+  showSyncStatus(type, message) {
+    const statusElement = document.getElementById('syncStatus');
+    if (statusElement) {
+      statusElement.textContent = message;
+      statusElement.className = `sync-status ${type}`;
+      statusElement.style.display = 'block';
+      
+      setTimeout(() => {
+        statusElement.style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  startAutoSync() {
+    this.stopAutoSync();
+    this.syncInterval = setInterval(async () => {
+      if (this.isOnline && this.pendingSync) {
+        await this.syncPendingData();
+      }
+      await this.syncFromServer();
+    }, 30000); // 30秒間隔
+  }
+
+  async syncPendingData() {
+    // ローカルの未同期データをサーバーに送信
+    const localData = JSON.parse(localStorage.getItem('stampRallyData') || '{}');
+    if (localData.visitedLocations) {
+      for (const stampId of localData.visitedLocations) {
+        await this.recordStampToServer(stampId, { lat: 0, lng: 0 });
+      }
+      this.pendingSync = false;
+    }
+  }
+
+  stopAutoSync() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+
+  // オンライン/オフライン状態監視
+  initNetworkMonitoring() {
+    window.addEventListener('online', () => {
+      this.isOnline = true;
+      this.showSyncStatus('success', 'オンラインに戻りました');
+      this.syncFromServer();
+    });
+
+    window.addEventListener('offline', () => {
+      this.isOnline = false;
+      this.showSyncStatus('warning', 'オフラインモードです');
+    });
+  }
+}
+
+// グローバルインスタンス
+const userSyncManager = new UserSyncManager();
+
 // ===== バックエンドからスタンプデータを取得 =====
 async function fetchStamps() {
   try {
@@ -153,38 +334,35 @@ async function fetchStamps() {
         lat: 34.6427, lng: 133.9089, radius: 100,
         image: "images/location-1.png",
         icon: "🌸"
-      }
-/* 一時的に２か所にしています
-      {   
+      },
+      {
         id: 2,
         name: {
-          ja: "岡山城", 
+          ja: "岡山城",
           en: "Okayama Castle",
           ko: "오카야마성",
           zh: "冈山城"
         },
         address: "〒700-0823 岡山県岡山市北区丸の内2-3-1",
-        lat: 34.664788, lng: 133.935969, radius: 200,
+        lat: 34.664788, lng: 133.935969, radius: 10000,
         image: "images/location-2.jpg",
         icon: "🏯"
       },
-      { 
+      {
         id: 3,
         name: {
-          ja: "岡山後楽園", 
+          ja: "岡山後楽園",
           en: "Okayama Korakuen",
           ko: "오카야마 고라쿠엔",
           zh: "冈山后乐园"
         },
         address: "〒703-8257 岡山県岡山市北区後楽園1-5",
-        lat: 34.667697, lng: 133.936505, radius: 200,
+        lat: 34.667697, lng: 133.936505, radius: 10000,
         image: "images/location-3.jpg",
         icon: "🌺"
       }
-*/
     ];
 
-    
     console.log("フォールバックデータを使用します");
     initStampRally();
   }
@@ -280,9 +458,17 @@ function updateLocationCards() {
   });
 }
 
-// DOMContentLoaded イベントリスナー
-document.addEventListener('DOMContentLoaded', () => {
+// DOMContentLoaded イベントリスナー（統合版）
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('DOM読み込み完了');
+  
+  // ネットワーク監視開始
+  userSyncManager.initNetworkMonitoring();
+  
+  // ユーザー初期化
+  await userSyncManager.initUser();
+  userSyncManager.startAutoSync();
+  
   // バックエンドからデータを取得してからアプリを初期化
   fetchStamps();
   
@@ -608,6 +794,12 @@ async function checkLocation(index) {
       if (card) {
         card.classList.add('visited');
       }
+
+      // サーバーに記録
+      await userSyncManager.recordStampToServer(index, {
+        lat: currentPosition.lat,
+        lng: currentPosition.lng
+      });
 
       // 効果音
       playStampSound();
