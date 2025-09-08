@@ -2,28 +2,31 @@
 import express from "express";
 import cors from "cors";
 import fs from "fs";
+import path from "path";
 
 const app = express();
 app.use(cors());
+app.use(express.json()); // JSON parsing middleware
 const PORT = 3000;
 
+// データベースのインポート（requireを使用）
+const database = require('./database');
+
 // JSONファイルからスタンプデータを読み込む
-const stamps = JSON.parse(fs.readFileSync("data/stamps.json", "utf-8"));
+const stampsPath = path.join(__dirname, "../data/stamps.json");
+let stamps: any[] = [];
+
+try {
+  stamps = JSON.parse(fs.readFileSync(stampsPath, "utf-8"));
+} catch (error) {
+  console.error("スタンプデータの読み込みに失敗:", error);
+  stamps = []; // フォールバック
+}
 
 // APIエンドポイント
 app.get("/api/stamps", (req, res) => {
     res.json(stamps);
 });
-
-app.listen(PORT, () => {
-    console.log(`✅ Backend running at http://localhost:${PORT}`);
-});
-
-// 既存のインポートに追加
-const database = require('./database');
-
-// 既存のコードの後に追加
-app.use(express.json()); // JSON parsing middleware
 
 // === ユーザー管理API ===
 
@@ -38,7 +41,7 @@ app.post("/api/users/init", async (req, res) => {
       userId: userId,
       message: "User initialized successfully"
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('User init error:', error);
     res.status(500).json({
       success: false,
@@ -56,9 +59,9 @@ app.get("/api/users/:userId/data", async (req, res) => {
     await database.updateUserActivity(userId);
     
     const stamps = await database.getUserStamps(userId);
-    const visitedLocations = stamps.map(stamp => stamp.stamp_id);
+    const visitedLocations = stamps.map((stamp: any) => stamp.stamp_id);
     const lastUpdated = stamps.length > 0 
-      ? Math.max(...stamps.map(s => new Date(s.collected_at).getTime()))
+      ? Math.max(...stamps.map((s: any) => new Date(s.collected_at).getTime()))
       : null;
 
     res.json({
@@ -70,7 +73,7 @@ app.get("/api/users/:userId/data", async (req, res) => {
         stamps: stamps
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get user data error:', error);
     res.status(500).json({
       success: false, 
@@ -100,7 +103,7 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
       recordId: result.id,
       message: "Stamp collected successfully"
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Collect stamp error:', error);
     res.status(500).json({
       success: false,
@@ -117,7 +120,7 @@ app.get("/api/stats", async (req, res) => {
       success: true,
       data: stats
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get stats error:', error);
     res.status(500).json({
       success: false,
@@ -126,7 +129,12 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// 既存のserver.listen()の前に追加
+// サーバー起動
+app.listen(PORT, () => {
+    console.log(`✅ Backend running at http://localhost:${PORT}`);
+});
+
+// グレースフルシャットダウン
 process.on('SIGINT', () => {
   console.log('Shutting down gracefully...');
   database.close();
