@@ -28,7 +28,8 @@
         "radius": 100,
         "image": "images/location-1.png",
         "icon": "🌸"
-    },
+    }
+/* 一時的に２か所にしています
     {
         "id": 2,
         "name": {
@@ -59,4 +60,5 @@
         "image": "images/location-3.jpg",
         "icon": "🌺"
     }
+*/
 ]
