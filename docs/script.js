@@ -1,5 +1,3 @@
-// script.js - バックエンドからスタンプデータを取得する版 + ユーザー同期機能
-
 // ===== Service Worker registration =====
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js")
@@ -108,14 +106,28 @@ let map = null;
 let markers = [];
 let userMarker = null;
 
-// ===== ユーザー同期機能追加 =====
+// ===== ユーザー同期機能追加（修正版） =====
 class UserSyncManager {
   constructor() {
     this.userId = null;
     this.syncInterval = null;
-    this.API_BASE = 'http://localhost:3000/api';
+    this.API_BASE = this.detectApiBase();
     this.isOnline = navigator.onLine;
     this.pendingSync = false;
+  }
+
+  // API Base URLを自動検出
+  detectApiBase() {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // ローカル開発環境の場合
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//localhost:3000/api`;
+    }
+    
+    // 本番環境の場合（同一オリジン）
+    return `${protocol}//${hostname}/api`;
   }
 
   async initUser() {
@@ -130,23 +142,32 @@ class UserSyncManager {
       const deviceInfo = this.getDeviceInfo();
       const language = currentLanguage || 'ja';
       
+      console.log('🔄 Creating new user...');
+      
       const response = await fetch(`${this.API_BASE}/users/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceInfo, language })
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const result = await response.json();
-      if (result.success) {
+      if (result.success && result.userId) {
         this.userId = result.userId;
         localStorage.setItem('stampRallyUserId', this.userId);
         console.log('✅ New user created:', this.userId.substring(0, 8) + '...');
         this.showSyncStatus('success', '新しいユーザーを作成しました');
         return true;
+      } else {
+        throw new Error(result.error || 'ユーザー作成に失敗しました');
       }
     } catch (error) {
       console.warn('❌ User init failed:', error);
       this.showSyncStatus('error', 'オフラインモードで動作中');
+      this.isOnline = false;
       return false;
     }
   }
@@ -164,7 +185,21 @@ class UserSyncManager {
     if (!this.userId || !this.isOnline) return false;
     
     try {
+      console.log('🔄 Syncing from server...');
+      
       const response = await fetch(`${this.API_BASE}/users/${this.userId}/data`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn('⚠️ User not found on server, will recreate');
+          // ユーザーIDを削除して再作成を促す
+          localStorage.removeItem('stampRallyUserId');
+          this.userId = null;
+          return await this.initUser();
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const result = await response.json();
       
       if (result.success) {
@@ -187,15 +222,18 @@ class UserSyncManager {
           if (currentTab === 'collection') {
             updateCollectionDisplay();
           }
+          console.log(`✅ Synced ${hasUpdates ? 'new ' : ''}data from server`);
           this.showSyncStatus('success', `${hasUpdates ? '新しい' : ''}データを同期しました`);
         }
         
-        console.log('✅ Synced from server:', serverData.totalStamps, 'stamps');
         return true;
+      } else {
+        throw new Error(result.error || 'サーバーからのデータ取得に失敗');
       }
     } catch (error) {
       console.warn('❌ Sync from server failed:', error);
       this.showSyncStatus('error', '同期に失敗しました');
+      this.isOnline = false;
       return false;
     }
   }
@@ -203,24 +241,38 @@ class UserSyncManager {
   async recordStampToServer(stampId, location) {
     if (!this.userId || !this.isOnline) {
       this.pendingSync = true;
+      console.log('📦 Stamp queued for later sync:', stampId);
       return false;
     }
     
     try {
+      console.log('🔄 Recording stamp to server:', stampId);
+      
       const response = await fetch(`${this.API_BASE}/users/${this.userId}/stamps/${stampId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ location })
+        body: JSON.stringify({ 
+          location: {
+            lat: location.lat,
+            lng: location.lng
+          }
+        })
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       
       const result = await response.json();
       if (result.success) {
         console.log('✅ Stamp recorded to server:', stampId);
         this.showSyncStatus('success', 'スタンプをサーバーに保存しました');
         return true;
-      } else {
+      } else if (result.message === "Stamp already collected") {
         console.log('ℹ️ Stamp already exists on server:', stampId);
         return false;
+      } else {
+        throw new Error(result.error || 'スタンプの保存に失敗');
       }
     } catch (error) {
       console.warn('❌ Failed to record stamp to server:', error);
@@ -232,6 +284,9 @@ class UserSyncManager {
 
   showSyncStatus(type, message) {
     const statusElement = document.getElementById('syncStatus');
+    const connectionIndicator = document.getElementById('connectionIndicator');
+    const connectionText = document.querySelector('.connection-text');
+    
     if (statusElement) {
       statusElement.textContent = message;
       statusElement.className = `sync-status ${type}`;
@@ -240,6 +295,17 @@ class UserSyncManager {
       setTimeout(() => {
         statusElement.style.display = 'none';
       }, 3000);
+    }
+
+    // 接続状態インジケーターの更新
+    if (connectionIndicator && connectionText) {
+      if (this.isOnline) {
+        connectionIndicator.textContent = '🟢';
+        connectionText.textContent = 'オンライン';
+      } else {
+        connectionIndicator.textContent = '🔴';
+        connectionText.textContent = 'オフライン';
+      }
     }
   }
 
@@ -289,15 +355,17 @@ class UserSyncManager {
 // グローバルインスタンス
 const userSyncManager = new UserSyncManager();
 
-// ===== バックエンドからスタンプデータを取得 =====
+// ===== バックエンドからスタンプデータを取得（修正版） =====
 async function fetchStamps() {
   try {
-    const res = await fetch("http://localhost:3000/api/stamps");
+    console.log('🔄 Fetching stamps from backend...');
+    
+    const res = await fetch(`${userSyncManager.API_BASE.replace('/api', '')}/api/stamps`);
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
     const stamps = await res.json();
-    console.log("スタンプデータを取得:", stamps);
+    console.log("✅ Stamps data loaded from backend:", stamps.length);
 
     // バックエンドから取得したデータをlocationsに設定
     locations = stamps;
@@ -305,9 +373,9 @@ async function fetchStamps() {
     // データ取得後にアプリを初期化
     initStampRally();
   } catch (err) {
-    console.error("スタンプデータの取得に失敗しました:", err);
+    console.warn("⚠️ Backend unavailable, using fallback data:", err);
     
-    // フォールバック: バックエンドが利用できない場合のデフォルトデータ
+    // フォールバック: 静的データを使用
     locations = [
       { 
         id: 0,
@@ -363,7 +431,11 @@ async function fetchStamps() {
       }
     ];
 
-    console.log("フォールバックデータを使用します");
+    // オフラインモードでも動作するように
+    userSyncManager.isOnline = false;
+    userSyncManager.showSyncStatus('warning', 'オフラインモードで動作中');
+    
+    console.log("✅ Using fallback data with", locations.length, "locations");
     initStampRally();
   }
 }
@@ -1005,6 +1077,7 @@ function saveData() {
   try { 
     localStorage.setItem('stampRallyData', JSON.stringify(data)); 
   } catch (e) { 
+    console.warn('Failed to save data to localStorage:', e);
     window.stampRallyData = data; 
   } 
 }
@@ -1013,6 +1086,7 @@ function saveLanguage() {
   try { 
     localStorage.setItem('stampRallyLanguage', currentLanguage); 
   } catch (e) { 
+    console.warn('Failed to save language to localStorage:', e);
     window.stampRallyLanguage = currentLanguage; 
   } 
 }
@@ -1108,4 +1182,7 @@ window.addEventListener('beforeunload', () => {
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId); 
   }
+  
+  // 同期マネージャーの停止
+  userSyncManager.stopAutoSync();
 });
