@@ -1,18 +1,38 @@
+// backend/src/database.ts
 import sqlite3 from "sqlite3";
 import path from "path";
+import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
 class Database {
-  private db: sqlite3.Database; // 👈 フィールドをここで宣言
+  private db: sqlite3.Database;
 
   constructor() {
-    const dbPath = path.join(__dirname, "../data/stamps.db");
-    this.db = new sqlite3.Database(dbPath);
+    // データディレクトリの確認・作成
+    const dataDir = path.join(__dirname, "../data");
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+      console.log("✅ Created data directory:", dataDir);
+    }
+
+    const dbPath = path.join(dataDir, "stamps.db");
+    console.log("🗄️ Database path:", dbPath);
+
+    this.db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error("❌ Database connection failed:", err);
+        throw err;
+      } else {
+        console.log("✅ Connected to SQLite database");
+      }
+    });
+
     this.init();
   }
 
   private init(): void {
     this.db.serialize(() => {
+      // ユーザーテーブル
       this.db.run(`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
@@ -21,8 +41,15 @@ class Database {
           device_info TEXT,
           language TEXT DEFAULT 'ja'
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating users table:", err);
+        } else {
+          console.log("✅ Users table ready");
+        }
+      });
 
+      // ユーザースタンプテーブル
       this.db.run(`
         CREATE TABLE IF NOT EXISTS user_stamps (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,14 +60,19 @@ class Database {
           location_lng REAL,
           FOREIGN KEY (user_id) REFERENCES users (id)
         )
-      `);
+      `, (err) => {
+        if (err) {
+          console.error("❌ Error creating user_stamps table:", err);
+        } else {
+          console.log("✅ User_stamps table ready");
+        }
+      });
 
-      this.db.run(
-        `CREATE INDEX IF NOT EXISTS idx_user_stamps_user_id ON user_stamps(user_id)`
-      );
-      this.db.run(
-        `CREATE INDEX IF NOT EXISTS idx_user_stamps_stamp_id ON user_stamps(stamp_id)`
-      );
+      // インデックス作成
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_user_stamps_user_id ON user_stamps(user_id)`);
+      this.db.run(`CREATE INDEX IF NOT EXISTS idx_user_stamps_stamp_id ON user_stamps(stamp_id)`);
+      
+      console.log("✅ Database initialization completed");
     });
   }
 
@@ -50,9 +82,14 @@ class Database {
       this.db.run(
         `INSERT INTO users (id, device_info, language) VALUES (?, ?, ?)`,
         [userId, deviceInfo, language],
-        (err: Error | null) => {
-          if (err) reject(err);
-          else resolve(userId);
+        function(err: Error | null) {
+          if (err) {
+            console.error("❌ Create user failed:", err);
+            reject(err);
+          } else {
+            console.log(`✅ User created: ${userId.substring(0, 8)}...`);
+            resolve(userId);
+          }
         }
       );
     });
@@ -63,9 +100,13 @@ class Database {
       this.db.run(
         `UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?`,
         [userId],
-        function (this: sqlite3.RunResult, err: Error | null) {
-          if (err) reject(err);
-          else resolve(this.changes ?? 0);
+        function(err: Error | null) {
+          if (err) {
+            console.error("❌ Update user activity failed:", err);
+            reject(err);
+          } else {
+            resolve(this.changes ?? 0);
+          }
         }
       );
     });
@@ -77,27 +118,36 @@ class Database {
     location: { lat: number; lng: number }
   ): Promise<{ alreadyCollected: boolean; id: number }> {
     return new Promise((resolve, reject) => {
+      // まず既存の記録をチェック
       this.db.get(
         `SELECT id FROM user_stamps WHERE user_id = ? AND stamp_id = ?`,
         [userId, stampId],
         (err: Error | null, row: { id: number } | undefined) => {
           if (err) {
+            console.error("❌ Check stamp failed:", err);
             reject(err);
             return;
           }
 
           if (row) {
+            // 既に獲得済み
             resolve({ alreadyCollected: true, id: row.id });
             return;
           }
 
+          // 新規記録を挿入
           this.db.run(
             `INSERT INTO user_stamps (user_id, stamp_id, location_lat, location_lng) 
              VALUES (?, ?, ?, ?)`,
             [userId, stampId, location.lat, location.lng],
-            function (this: sqlite3.RunResult, err: Error | null) {
-              if (err) reject(err);
-              else resolve({ alreadyCollected: false, id: this.lastID });
+            function(err: Error | null) {
+              if (err) {
+                console.error("❌ Collect stamp failed:", err);
+                reject(err);
+              } else {
+                console.log(`✅ Stamp ${stampId} collected by user ${userId.substring(0, 8)}...`);
+                resolve({ alreadyCollected: false, id: this.lastID! });
+              }
             }
           );
         }
@@ -114,8 +164,10 @@ class Database {
          FROM user_stamps WHERE user_id = ? ORDER BY collected_at`,
         [userId],
         (err: Error | null, rows: unknown[]) => {
-          if (err) reject(err);
-          else
+          if (err) {
+            console.error("❌ Get user stamps failed:", err);
+            reject(err);
+          } else {
             resolve(
               rows as {
                 stamp_id: number;
@@ -124,6 +176,7 @@ class Database {
                 location_lng: number;
               }[]
             );
+          }
         }
       );
     });
@@ -137,12 +190,14 @@ class Database {
   }> {
     return new Promise((resolve, reject) => {
       Promise.all([
+        // 総ユーザー数
         new Promise<number>((res, rej) => {
           this.db.get(`SELECT COUNT(*) as count FROM users`, (err, row) => {
             if (err) rej(err);
             else res((row as any).count as number);
           });
         }),
+        // 完了ユーザー数（2個以上のスタンプを獲得）
         new Promise<number>((res, rej) => {
           this.db.get(
             `SELECT COUNT(*) as count FROM (
@@ -154,6 +209,7 @@ class Database {
             }
           );
         }),
+        // スタンプ別獲得数
         new Promise<{ stamp_id: number; count: number }[]>((res, rej) => {
           this.db.all(
             `SELECT stamp_id, COUNT(*) as count 
@@ -176,12 +232,30 @@ class Database {
             stampCounts,
           });
         })
-        .catch(reject);
+        .catch((err) => {
+          console.error("❌ Get stats failed:", err);
+          reject(err);
+        });
     });
   }
 
   close(): void {
-    this.db.close();
+    this.db.close((err) => {
+      if (err) {
+        console.error("❌ Database close failed:", err);
+      } else {
+        console.log("✅ Database connection closed");
+      }
+    });
+  }
+
+  // ヘルスチェック用
+  async isHealthy(): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.db.get("SELECT 1", (err) => {
+        resolve(!err);
+      });
+    });
   }
 }
 
