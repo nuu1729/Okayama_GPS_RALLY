@@ -31,3 +31,17 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# データベースファイル
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# ログファイル
+backend/logs/
+*.log
+
+# 環境設定ファイル
+.env
+.env.local
