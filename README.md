@@ -119,102 +119,74 @@
 
 ## 🚀 0からの環境構築手順
 
-### 3.1 必要なソフトウェアのインストール
+### 3.1 セットアップ
 
-#### Step 1: Node.jsのインストール
+#### Step 1. リポジトリのクローン
 ```bash
-# 1. Node.js公式サイトからダウンロード
-# https://nodejs.org/ → LTS版を選択
-
-# 2. インストール確認
-node --version  # v16以上であることを確認
-npm --version   # npmも同時にインストールされる
+git clone <repository-url>
+cd stamp-rally-app
 ```
 
-#### Step 2: テキストエディタの準備
-推奨エディタ:
-- **Visual Studio Code** (無料、拡張機能豊富)
-- **WebStorm** (有料、高機能)
-
-VS Code推奨拡張機能:
-```
-- Live Server (HTMLのリアルタイムプレビュー)
-- TypeScript and JavaScript Language Features
-- HTML CSS Support
-- Auto Rename Tag
-```
-
-#### Step 3: ブラウザの準備
-開発用ブラウザ:
-```
-✅ Chrome (開発者ツールが優秀)
-✅ Firefox (デバッグ機能充実)
-⚠️ Safari (Mac環境でのテスト用)
-```
-
-### 3.2 プロジェクトのセットアップ
-
-#### Step 1: リポジトリの取得
+#### Step 2. バックエンドのセットアップ
 ```bash
-# GitHubからクローン
-git clone https://github.com/nuu1729/Okayama_GPS_RALLY.git
-
-# プロジェクトフォルダに移動
-cd Okayama_GPS_RALLY
-
-# フォルダ構成の確認
-ls -la
-# backend/  docs/  README.md  package.json が表示される
-```
-
-#### Step 2: バックエンドのセットアップ
-```bash
-# バックエンドフォルダに移動
 cd backend
 
-# 依存関係をインストール
+# 依存関係のインストール
 npm install
 
-# TypeScriptのcorsの型定義をインストール（重要！）
-npm install --save-dev @types/cors
+# 環境変数の設定
+cp .env.example .env
+# .envファイルを編集して適切な値を設定
 
-# 開発サーバーを起動
+# TypeScriptのコンパイル
+npm run build
+
+# サーバーの起動
+npm start
+
+# 開発モード（TypeScriptの自動コンパイル）
 npm run dev
-
-# ✅ 成功時の表示:
-# ✅ Backend running at http://localhost:3000
-# 🚀 正しい server.ts が起動しました！
 ```
 
-#### Step 3: フロントエンドのセットアップ
+#### Step 3. フロントエンドの配信
 ```bash
-# 新しいターミナルを開く
-cd Okayama_GPS_RALLY/docs
+cd docs
 
-# 方法1: Pythonを使う場合
+# 簡易HTTPサーバーの起動（例）
+npx serve .
+# または
 python -m http.server 8080
-
-# 方法2: Node.jsを使う場合  
-npx http-server . -p 8080
-
-# 方法3: VS Code Live Serverを使う場合
-# index.htmlを右クリック → "Open with Live Server"
 ```
 
-#### Step 4: 動作確認
-```bash
-# ブラウザで以下にアクセス
-http://localhost:8080
+#### Step 4. ブラウザでアクセス
+- フロントエンド: `http://localhost:8080`
+- バックエンドAPI: `http://localhost:3000`
 
-# ✅ 正常動作の確認項目:
-1. アプリタイトルが表示される
-2. 位置情報の許可を求められる
-3. 4つの観光地カードが表示される
-4. 地図が正常に描画される
-5. BGMコントロールが機能する
+### ⚙️ 環境変数設定
+
+`backend/.env`ファイルを作成し、以下の値を設定：
+
+```env
+# サーバーポート
+PORT=3000
+
+# データベース設定
+DATABASE_PATH=./data/stamps.db
+
+# CORS設定（カンマ区切りで複数指定可能）
+CORS_ORIGINS=http://localhost:8080,http://localhost:3001,http://127.0.0.1:5500
+
+# ログレベル（debug, info, warn, error）
+LOG_LEVEL=info
+
+# セッション設定
+SESSION_SECRET=your-secret-key-here
+
+# 開発/本番環境の切り替え
+NODE_ENV=development
 ```
 
-### 3.3 初回起動時のトラブルシューティング
+### 3.2 初回起動時のトラブルシューティング
 
 #### 問題1: 位置情報が取得できない
 ```
