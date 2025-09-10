@@ -123,7 +123,7 @@
 
 #### Step 1. リポジトリのクローン
 ```bash
-git clone <repository-url>
+git clone https://github.com/nuu1729/Okayama_GPS_RALLY
 cd stamp-rally-app
 ```
 
