@@ -143,13 +143,14 @@
       <button id="debugBtn" class="debug-btn" onclick="toggleDebug()">🐞 デバッグモード切替</button>
       
       <div id="debug-buttons" class="debug-controls" style="display:none;">
-        <button class="debug-sub-btn" onclick="showCurrentPosition()">📍 現在地表示</button>
-        <button class="debug-sub-btn" onclick="debugMarkAll()">✅ 全て獲得</button>
-        <button class="debug-sub-btn" onclick="debugClearAll()">🗑️ 全てクリア</button>
+          <button class="debug-sub-btn" onclick="showCurrentPosition()">📍 現在地表示</button>
+          <button class="debug-sub-btn" onclick="debugMarkAll()">✅ 全て獲得</button>
+          <button class="debug-sub-btn" onclick="debugClearLocal()">🗑️ ローカルデータをクリア</button>
+          <button class="debug-sub-btn" onclick="debugClearAll()">🔥 全てクリア</button>
       </div>
     </div>
   </div>
-  
+
   <!-- audio elements -->
   <div class="audio-elements" aria-hidden="true">
     <audio id="bgm" src="Sounds/BGM.mp3" loop preload="auto"></audio>
