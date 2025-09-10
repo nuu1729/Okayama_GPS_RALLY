@@ -1165,16 +1165,52 @@ function debugMarkAll() {
   alert('全スタンプ獲得済みにしました');
 }
 
-function debugClearAll() { 
-  visitedLocations = new Set(); 
-  saveData(); 
-  updateDisplay(); 
+function debugClearLocal() {
+    visitedLocations = new Set(); 
+    saveData(); 
+    updateDisplay(); 
   
-  if (currentTab === 'collection') {
-    updateCollectionDisplay();
-  }
+    if (currentTab === 'collection') {
+      updateCollectionDisplay();
+    }
   
-  alert('全スタンプをクリアしました'); 
+    alert('✅ ローカルのスタンプデータをクリアしました'); 
+    userSyncManager.showSyncStatus('success', 'ローカルデータをクリアしました');
+}
+
+async function debugClearAll() { 
+    if (!confirm('本当にローカルとサーバーの全データをクリアしますか？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${userSyncManager.API_BASE.replace('/api', '')}/api/debug/reset-data`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // ローカルのデータもクリア
+            debugClearLocal();
+            // ユーザーIDもリセット
+            localStorage.removeItem('stampRallyUserId');
+            userSyncManager.userId = null;
+            
+            alert('🎉 サーバーとローカルの全スタンプデータをクリアしました。');
+            userSyncManager.showSyncStatus('success', '全データをクリアしました');
+            window.location.reload(); // ページをリロードして再初期化
+        } else {
+            throw new Error(result.error || 'サーバーデータのクリアに失敗しました');
+        }
+    } catch (error) {
+        console.error('❌ データリセットエラー:', error);
+        alert(`❌ データリセットに失敗しました: ${error.message}`);
+    }
 }
 
 // ===== Event listeners =====
