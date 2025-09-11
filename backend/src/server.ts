@@ -53,7 +53,7 @@ app.get("/api/stamps", (req, res) => {
 app.post("/api/users/init", async (req, res) => {
   try {
     const { deviceInfo, language } = req.body;
-    
+
     if (!deviceInfo) {
       return res.status(400).json({
         success: false,
@@ -62,9 +62,9 @@ app.post("/api/users/init", async (req, res) => {
     }
 
     const userId = await database.createUser(deviceInfo, language || 'ja');
-    
+
     console.log(`✅ New user created: ${userId.substring(0, 8)}...`);
-    
+
     res.json({
       success: true,
       userId: userId,
@@ -83,7 +83,7 @@ app.post("/api/users/init", async (req, res) => {
 app.get("/api/users/:userId/data", async (req, res) => {
   try {
     const { userId } = req.params;
-    
+
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -93,10 +93,10 @@ app.get("/api/users/:userId/data", async (req, res) => {
 
     // アクティビティ更新
     await database.updateUserActivity(userId);
-    
+
     const stamps = await database.getUserStamps(userId);
     const visitedLocations = stamps.map((stamp: any) => stamp.stamp_id);
-    const lastUpdated = stamps.length > 0 
+    const lastUpdated = stamps.length > 0
       ? Math.max(...stamps.map((s: any) => new Date(s.collected_at).getTime()))
       : null;
 
@@ -112,7 +112,7 @@ app.get("/api/users/:userId/data", async (req, res) => {
   } catch (error: any) {
     console.error('❌ Get user data error:', error);
     res.status(500).json({
-      success: false, 
+      success: false,
       error: error.message || "Failed to get user data"
     });
   }
@@ -123,7 +123,7 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
   try {
     const { userId, stampId } = req.params;
     const { location } = req.body;
-    
+
     if (!userId || !stampId) {
       return res.status(400).json({
         success: false,
@@ -137,9 +137,9 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
         error: "Valid location (lat, lng) is required"
       });
     }
-    
+
     const result = await database.collectStamp(userId, parseInt(stampId), location);
-    
+
     if (result.alreadyCollected) {
       console.log(`ℹ️ Stamp ${stampId} already collected by user ${userId.substring(0, 8)}...`);
       return res.json({
@@ -148,9 +148,9 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
         recordId: result.id
       });
     }
-    
+
     console.log(`✅ Stamp ${stampId} collected by user ${userId.substring(0, 8)}...`);
-    
+
     res.json({
       success: true,
       recordId: result.id,
@@ -165,22 +165,26 @@ app.post("/api/users/:userId/stamps/:stampId", async (req, res) => {
   }
 });
 
-// 統計情報取得
-app.get("/api/stats", async (req, res) => {
-  try {
-    const stats = await database.getStats();
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (error: any) {
-    console.error('❌ Get stats error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to get stats"
-    });
-  }
+// ===== デバッグ用API =====
+// ユーザーの全スタンプデータを削除する
+app.delete("/api/debug/reset-data", async (req, res) => {
+    try {
+        const deletedCount = await database.deleteAllStamps();
+        console.log(`✅ Debug: Deleted all stamp records (${deletedCount} records)`);
+        res.json({
+            success: true,
+            message: `Successfully deleted all stamp data.`,
+            deletedCount: deletedCount
+        });
+    } catch (error: any) {
+        console.error('❌ Debug reset error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message || "Failed to reset data"
+        });
+    }
 });
+
 
 // 404ハンドラー
 app.use((req, res) => {
