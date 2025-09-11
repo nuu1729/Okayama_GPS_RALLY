@@ -239,6 +239,18 @@ class Database {
     });
   }
 
+  // 全ユーザーのスタンプデータを削除するメソッド
+  async deleteAllStamps(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      this.db.run("DELETE FROM user_stamps", function(err) {
+        if (err) {
+          return reject(err);
+        }
+        resolve(this.changes ?? 0); // 削除されたレコード数を返す
+      });
+    });
+  }
+
   close(): void {
     this.db.close((err) => {
       if (err) {
