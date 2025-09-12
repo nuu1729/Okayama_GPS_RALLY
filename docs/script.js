@@ -387,8 +387,8 @@ async function fetchStamps() {
         },
         address: "〒700-0927 岡山県岡山市北区西古松250",
         lat: 34.6427, lng: 133.9089, radius: 40,
-        image: "images/location-1.png",
-        icon: "🌸"
+        image: "images/location-0.jpg",
+        icon: "🌳"
       },
       { 
         id: 1,
@@ -400,8 +400,8 @@ async function fetchStamps() {
         },
         address: "〒700-0973 岡山県岡山市北区下中野",
         lat: 34.6433, lng: 133.9053, radius: 40,
-        image: "images/location-0.jpg",
-        icon: "🌳"
+        image: "images/location-1.png",
+        icon: "🌸"
       },
       {
         id: 2,
@@ -412,7 +412,7 @@ async function fetchStamps() {
           zh: "冈山城"
         },
         address: "〒700-0823 岡山県岡山市北区丸の内2-3-1",
-        lat: 34.664788, lng: 133.935969, radius: 10000,
+        lat: 34.664788, lng: 133.935969, radius: 100,
         image: "images/location-2.jpg",
         icon: "🏯"
       },
@@ -425,7 +425,7 @@ async function fetchStamps() {
           zh: "冈山后乐园"
         },
         address: "〒703-8257 岡山県岡山市北区後楽園1-5",
-        lat: 34.667697, lng: 133.936505, radius: 10000,
+        lat: 34.667697, lng: 133.936505, radius: 100,
         image: "images/location-3.jpg",
         icon: "🌺"
       }
@@ -487,7 +487,7 @@ function initMap() {
 
     // 各ロケーションにピンを立てる
     markers = []; // 既存のマーカーをクリア
-    locations.forEach((loc, i) => {
+    locations.forEach((loc) => { // 修正済み
       const marker = L.marker([loc.lat, loc.lng]).addTo(map)
         .bindPopup(`<b>${loc.name.ja}</b><br>${loc.address}`);
       markers.push(marker);
@@ -791,8 +791,7 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   const dLat = toRadians(lat2 - lat1); 
   const dLng = toRadians(lng2 - lng1); 
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + 
-           Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
-           Math.sin(dLng / 2) * Math.sin(dLng / 2); 
+           Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2); 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
   return R * c; 
 }
